@@ -286,7 +286,7 @@
         
         <div id="settlementsResult" style="display:none;">
             <div class="bank-summary">
-                <h3 style="margin-top:0;">Состояние банка (Общак)</h3>
+                <h3 style="margin-top:0;">Состояние банка</h3>
                 <p>Внесено: <strong id="sumBI">0</strong></p>
                 <p>Выплачено: <strong id="sumCO">0</strong></p>
                 <p>Баланс: <strong id="sumBank">0</strong> <span id="bankStatusText"></span></p>
@@ -298,7 +298,7 @@
                     <thead>
                         <tr>
                             <th>Игрок</th>
-                            <th>Баланс</th>
+                            <th>Личный</th>
                             <th>В/Из банка</th>
                             <th>Итого</th>
                         </tr>
@@ -389,8 +389,8 @@
         <h3>Добавить операцию</h3>
         <select id="txPlayerSelect"></select>
         <select id="txTypeSelect">
-            <option value="buyin">Бай-ин (Внесено)</option>
-            <option value="cashout">Кэш-аут (Выплачено)</option>
+            <option value="buyin">Бай-ин (Купить фишки)</option>
+            <option value="cashout">Кэш-аут (Вывести)</option>
         </select>
         <input type="number" id="txAmountInput" placeholder="Сумма" inputmode="numeric" pattern="[0-9]*">
         <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
