@@ -196,6 +196,12 @@
             color: var(--primary);
         }
         
+        .warning-text {
+            color: var(--warning);
+            font-size: 13px;
+            font-style: italic;
+        }
+        
         @media (max-width: 768px) {
             body { padding: 5px; }
             .card { padding: 12px; }
@@ -286,7 +292,7 @@
         
         <div id="settlementsResult" style="display:none;">
             <div class="bank-summary">
-                <h3 style="margin-top:0;">Состояние банка</h3>
+                <h3 style="margin-top:0;">Состояние банка (Общак)</h3>
                 <p>Внесено: <strong id="sumBI">0</strong></p>
                 <p>Выплачено: <strong id="sumCO">0</strong></p>
                 <p>Баланс: <strong id="sumBank">0</strong> <span id="bankStatusText"></span></p>
@@ -298,7 +304,7 @@
                     <thead>
                         <tr>
                             <th>Игрок</th>
-                            <th>Личный</th>
+                            <th>Баланс</th>
                             <th>В/Из банка</th>
                             <th>Итого</th>
                         </tr>
@@ -366,6 +372,7 @@
         <h3>Добавить игроков списком</h3>
         <p style="font-size:13px;">Формат: <code>Имя Бай-ин</code> или <code>Имя</code></p>
         <textarea id="listInput" placeholder="Иван 5000&#10;Мария 10000&#10;Петр"></textarea>
+        <div id="listWarnings" style="margin:10px 0;"></div>
         <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
             <button class="btn-secondary" onclick="closeModal('addListModal')">Отмена</button>
             <button class="btn-primary" onclick="addPlayersFromList()">Добавить</button>
@@ -389,8 +396,8 @@
         <h3>Добавить операцию</h3>
         <select id="txPlayerSelect"></select>
         <select id="txTypeSelect">
-            <option value="buyin">Бай-ин (Купить фишки)</option>
-            <option value="cashout">Кэш-аут (Вывести)</option>
+            <option value="buyin">Бай-ин (Внесено)</option>
+            <option value="cashout">Кэш-аут (Выплачено)</option>
         </select>
         <input type="number" id="txAmountInput" placeholder="Сумма" inputmode="numeric" pattern="[0-9]*">
         <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
@@ -408,7 +415,6 @@
         archive: JSON.parse(localStorage.getItem('casino_archive') || '[]')
     };
 
-    // Восстановление активной сессии
     const savedSession = localStorage.getItem('casino_session');
     if (savedSession) {
         try {
@@ -421,10 +427,8 @@
         }
     }
 
-    // Миграция старого архива (если нет поля data)
     state.archive = state.archive.filter(s => s.data);
 
-    // Переменные для отложенных действий
     let pendingOpenIndex = null;
     let pendingDeleteIndex = null;
 
@@ -441,6 +445,15 @@
         localStorage.setItem('casino_archive', JSON.stringify(state.archive));
     }
 
+    function findPlayerCaseInsensitive(name) {
+        const normalized = name.trim().toLowerCase();
+        return state.players.find(p => p.name.trim().toLowerCase() === normalized) || null;
+    }
+
+    function isPlayerExists(name) {
+        return findPlayerCaseInsensitive(name) !== null;
+    }
+
     function formatMoney(n) {
         return n.toLocaleString('ru-RU');
     }
@@ -453,6 +466,7 @@
     
     function openModal(id) {
         if (id === 'addTxModal') updatePlayerSelect();
+        if (id === 'addListModal') document.getElementById('listWarnings').innerHTML = '';
         document.getElementById(id).classList.add('active');
     }
     
@@ -488,7 +502,6 @@
 
     function confirmReset() {
         if (document.getElementById('resetConfirmInput').value.trim().toLowerCase() === 'сбросить') {
-            // Сброс БЕЗ сохранения в архив
             state.active = false;
             state.players = [];
             state.transactions = [];
@@ -502,7 +515,6 @@
         }
     }
 
-    // --- Работа с архивом ---
     function saveToArchive() {
         if (state.players.length === 0) {
             if (!confirm('В сессии нет игроков. Всё равно сохранить в архив?')) return;
@@ -559,7 +571,6 @@
         saveState();
         renderAll();
         
-        // Прокрутка к игровой области
         document.getElementById('gameArea').scrollIntoView({ behavior: 'smooth' });
     }
 
@@ -578,11 +589,15 @@
         closeModal('deleteSessionModal');
     }
 
-    // --- Добавление игроков ---
     function addSinglePlayer() {
         const name = document.getElementById('singleNameInput').value.trim();
         if (!name) return alert('Введите имя');
-        if (state.players.find(p => p.name === name)) return alert('Игрок уже существует');
+        
+        if (isPlayerExists(name)) {
+            const existing = findPlayerCaseInsensitive(name);
+            alert(`Игрок «${existing.name}» уже существует в сессии.`);
+            return;
+        }
         
         state.players.push({ name, buyins: 0, cashouts: 0 });
         document.getElementById('singleNameInput').value = '';
@@ -595,6 +610,11 @@
         const text = document.getElementById('listInput').value;
         const lines = text.split('\n');
         
+        let addedCount = 0;
+        let skippedDuplicates = [];
+        let warningsDiv = document.getElementById('listWarnings');
+        warningsDiv.innerHTML = '';
+        
         lines.forEach(line => {
             line = line.trim();
             if (!line) return;
@@ -604,14 +624,35 @@
             const buyin = parts.length > 1 ? parseFloat(parts[1]) : 0;
 
             if (!name) return;
-            if (!state.players.find(p => p.name === name)) {
-                state.players.push({ name, buyins: 0, cashouts: 0 });
+            
+            if (isPlayerExists(name)) {
+                const existing = findPlayerCaseInsensitive(name);
+                skippedDuplicates.push(`«${name}» (уже есть как «${existing.name}»)`);
+                return;
             }
+            
+            state.players.push({ name, buyins: 0, cashouts: 0 });
+            addedCount++;
             
             if (buyin > 0 && !isNaN(buyin)) {
                 addTxLogic(name, 'buyin', buyin);
             }
         });
+
+        if (skippedDuplicates.length > 0) {
+            warningsDiv.innerHTML = `
+                <div style="background:#fff3cd; padding:10px; border-radius:5px; border-left:4px solid var(--warning);">
+                    <strong>Пропущены дубликаты:</strong><br>
+                    ${skippedDuplicates.join('<br>')}
+                </div>
+            `;
+        }
+
+        if (addedCount === 0 && skippedDuplicates.length > 0) {
+            saveState();
+            renderAll();
+            return;
+        }
 
         document.getElementById('listInput').value = '';
         closeModal('addListModal');
@@ -639,7 +680,7 @@
     }
 
     function addTxLogic(playerName, type, amount) {
-        const player = state.players.find(p => p.name === playerName);
+        const player = findPlayerCaseInsensitive(playerName);
         if (!player) return;
 
         if (type === 'buyin') player.buyins += amount;
@@ -647,7 +688,7 @@
 
         state.transactions.push({
             time: new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'}),
-            player: playerName,
+            player: player.name,
             type: type === 'buyin' ? 'Бай-ин' : 'Кэш-аут',
             amount: amount
         });
