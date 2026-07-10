@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Учёт сессий Казино</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --danger: #c0392b;
+            --bg: #f4f7f6;
+            --card: #ffffff;
+        }
+        
+        * { box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg); 
+            color: #333; 
+            margin: 0; 
+            padding: 10px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { font-size: 1.5em; color: var(--primary); margin: 10px 0; }
+        h2 { font-size: 1.3em; color: var(--primary); margin: 15px 0 10px; }
+        h3 { font-size: 1.1em; margin: 10px 0; }
+        
+        .card { 
+            background: var(--card); 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            margin-bottom: 15px; 
+        }
+        
+        button { 
+            padding: 12px 15px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 14px;
+            transition: 0.2s;
+            min-height: 44px;
+            touch-action: manipulation;
+        }
+        
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover, .btn-primary:active { background: #219a52; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover, .btn-danger:active { background: #a93226; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover, .btn-secondary:active { background: #7f8c8d; }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 10px 0;
+        }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            min-width: 500px;
+        }
+        
+        th, td { 
+            padding: 10px 8px; 
+            text-align: left; 
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+        }
+        
+        th { 
+            background: #f8f9fa; 
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+        }
+        
+        .positive { color: var(--accent); font-weight: bold; }
+        .negative { color: var(--danger); font-weight: bold; }
+
+        .modal { 
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.5); 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 100;
+            padding: 10px;
+        }
+        
+        .modal-content { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh; 
+            overflow-y: auto;
+        }
+        
+        .modal.active { display: flex; }
+        
+        input, textarea, select { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border: 1px solid #ddd; 
+            border-radius: 5px; 
+            font-size: 16px;
+            min-height: 44px;
+        }
+        
+        textarea { min-height: 120px; font-family: monospace; resize: vertical; }
+        
+        .bank-summary { 
+            background: #e8f4f8; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            border-left: 5px solid #3498db; 
+        }
+        
+        .bank-summary p { 
+            margin: 8px 0; 
+            font-size: 14px;
+        }
+        
+        .flex-row { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .flex-row > * { 
+            margin: 0;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .flex-row button {
+            flex: 1;
+            white-space: nowrap;
+        }
+        
+        .transfer-list {
+            background: #fff9e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            border-left: 5px solid #f39c12;
+        }
+        
+        .transfer-item {
+            padding: 10px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+        }
+        
+        .transfer-item strong {
+            color: var(--primary);
+        }
+        
+        .transfer-amount {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 5px; }
+            .card { padding: 12px; }
+            h1 { font-size: 1.3em; }
+            h2 { font-size: 1.2em; }
+            
+            .flex-row {
+                flex-direction: column;
+            }
+            
+            .flex-row button {
+                width: 100%;
+            }
+            
+            table { font-size: 13px; }
+            th, td { padding: 8px 5px; }
+            
+            .modal-content { 
+                padding: 15px;
+                max-height: 95vh;
+            }
+            
+            .bank-summary p { font-size: 13px; }
+        }
+        
+        @media (max-width: 480px) {
+            button { font-size: 13px; padding: 10px; }
+            .card { padding: 10px; margin-bottom: 10px; }
+            table { min-width: 400px; }
+        }
+        
+        @supports (-webkit-touch-callout: none) {
+            input, textarea, select {
+                font-size: 16px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎰 Учёт сессий Казино</h1>
+
+    <!-- Управление сессиями -->
+    <div class="card">
+        <div class="flex-row">
+            <button class="btn-primary" onclick="startNewSession()">+ Новая сессия</button>
+            <button class="btn-danger" onclick="showResetConfirm()">Сбросить</button>
+        </div>
+        <p id="sessionStatus" style="margin-top:10px; color:#7f8c8d; font-size:14px;">Создайте новую сессию, чтобы начать учёт.</p>
+    </div>
+
+    <!-- Игроки и Транзакции -->
+    <div class="card" id="gameArea" style="display:none;">
+        <h2>Игроки и Операции</h2>
+        <div class="flex-row">
+            <button class="btn-secondary" onclick="openModal('addListModal')">+ Списком</button>
+            <button class="btn-primary" onclick="openModal('addSingleModal')">+ Игрок</button>
+            <button class="btn-primary" onclick="openModal('addTxModal')">+ Операция</button>
+        </div>
+
+        <h3>Журнал операций</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Время</th><th>Игрок</th><th>Тип</th><th>Сумма</th></tr></thead>
+                <tbody id="txTable"></tbody>
+            </table>
+        </div>
+
+        <h3>Список игроков</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Игрок</th><th>Σ Бай-ин</th><th>Σ Кэш-аут</th><th>Результат</th></tr></thead>
+                <tbody id="playerTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Взаиморасчёты (внизу страницы) -->
+    <div class="card" id="settlementsArea" style="display:none;">
+        <h2>💰 Взаиморасчёты</h2>
+        <button class="btn-primary" onclick="calculateSettlements()" style="width:100%; font-size:16px; padding:15px; margin-bottom:15px;">Рассчитать взаиморасчёты</button>
+        
+        <div id="settlementsResult" style="display:none;">
+            <!-- Состояние банка -->
+            <div class="bank-summary">
+                <h3 style="margin-top:0;">Состояние банка (Общак)</h3>
+                <p>Внесено: <strong id="sumBI">0</strong></p>
+                <p>Выплачено: <strong id="sumCO">0</strong></p>
+                <p>Баланс: <strong id="sumBank">0</strong> <span id="bankStatusText"></span></p>
+            </div>
+
+            <!-- Таблица расчетов -->
+            <h3>Итоги по игрокам</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Игрок</th>
+                            <th>Баланс</th>
+                            <th>В/Из банка</th>
+                            <th>Итого</th>
+                        </tr>
+                    </thead>
+                    <tbody id="settlementsTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Блок переводов -->
+            <div class="transfer-list">
+                <h3 style="margin-top:0;">📤 Кто кому переводит</h3>
+                <div id="transfersList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Архив -->
+    <div class="card">
+        <h2>Архив сессий</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Название</th><th>Дата</th><th>Игроков</th><th>Операций</th></tr></thead>
+                <tbody id="archiveTable"><tr><td colspan="4" style="text-align:center; color:#999;">Нет сохранённых сессий</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Модальные окна -->
+<div id="resetModal" class="modal">
+    <div class="modal-content">
+        <h3>Подтверждение сброса</h3>
+        <p>Введите слово <code>сбросить</code>:</p>
+        <input type="text" id="resetConfirmInput" placeholder="сбросить" autocomplete="off">
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('resetModal')">Отмена</button>
+            <button class="btn-danger" onclick="confirmReset()">Подтвердить</button>
+        </div>
+    </div>
+</div>
+
+<div id="addListModal" class="modal">
+    <div class="modal-content">
+        <h3>Добавить игроков списком</h3>
+        <p style="font-size:13px;">Формат: <code>Имя Бай-ин</code> или <code>Имя</code></p>
+        <textarea id="listInput" placeholder="Иван 5000&#10;Мария 10000&#10;Петр"></textarea>
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('addListModal')">Отмена</button>
+            <button class="btn-primary" onclick="addPlayersFromList()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<div id="addSingleModal" class="modal">
+    <div class="modal-content">
+        <h3>Добавить игрока</h3>
+        <input type="text" id="singleNameInput" placeholder="Имя игрока" autocomplete="off">
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('addSingleModal')">Отмена</button>
+            <button class="btn-primary" onclick="addSinglePlayer()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<div id="addTxModal" class="modal">
+    <div class="modal-content">
+        <h3>Добавить операцию</h3>
+        <select id="txPlayerSelect"></select>
+        <select id="txTypeSelect">
+            <option value="buyin">Бай-ин (Внесено)</option>
+            <option value="cashout">Кэш-аут (Выплачено)</option>
+        </select>
+        <input type="number" id="txAmountInput" placeholder="Сумма" inputmode="numeric" pattern="[0-9]*">
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('addTxModal')">Отмена</button>
+            <button class="btn-primary" onclick="addTransaction()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Загрузка состояния из localStorage
+    let state = {
+        active: false,
+        players: [],
+        transactions: [],
+        archive: JSON.parse(localStorage.getItem('casino_archive') || '[]')
+    };
+
+    // Восстановление активной сессии
+    const savedSession = localStorage.getItem('casino_session');
+    if (savedSession) {
+        const sessionData = JSON.parse(savedSession);
+        state.active = sessionData.active;
+        state.players = sessionData.players;
+        state.transactions = sessionData.transactions;
+    }
+
+    // --- Сохранение состояния ---
+    function saveState() {
+        const sessionData = {
+            active: state.active,
+            players: state.players,
+            transactions: state.transactions
+        };
+        localStorage.setItem('casino_session', JSON.stringify(sessionData));
+    }
+
+    function saveArchive() {
+        localStorage.setItem('casino_archive', JSON.stringify(state.archive));
+    }
+
+    // --- Утилиты ---
+    function formatMoney(n) {
+        return n.toLocaleString('ru-RU');
+    }
+    
+    function getMoneyClass(n) {
+        if (n > 0) return 'positive';
+        if (n < 0) return 'negative';
+        return '';
+    }
+    
+    function openModal(id) {
+        if (id === 'addTxModal') updatePlayerSelect();
+        document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    function startNewSession() {
+        state.active = true;
+        state.players = [];
+        state.transactions = [];
+        document.getElementById('gameArea').style.display = 'block';
+        document.getElementById('settlementsArea').style.display = 'block';
+        document.getElementById('settlementsResult').style.display = 'none';
+        document.getElementById('sessionStatus').innerText = 'Сессия активна. Добавьте игроков.';
+        saveState();
+        renderAll();
+    }
+
+    function showResetConfirm() {
+        document.getElementById('resetConfirmInput').value = '';
+        openModal('resetModal');
+    }
+
+    function confirmReset() {
+        if (document.getElementById('resetConfirmInput').value.trim().toLowerCase() === 'сбросить') {
+            if (state.players.length > 0) {
+                state.archive.unshift({
+                    name: `Сессия от ${new Date().toLocaleDateString()}`,
+                    date: new Date().toISOString(),
+                    players: state.players.length,
+                    tx: state.transactions.length
+                });
+                saveArchive();
+                renderArchive();
+            }
+            
+            state.active = false;
+            state.players = [];
+            state.transactions = [];
+            localStorage.removeItem('casino_session');
+            
+            document.getElementById('gameArea').style.display = 'none';
+            document.getElementById('settlementsArea').style.display = 'none';
+            document.getElementById('sessionStatus').innerText = 'Создайте новую сессию, чтобы начать учёт.';
+            closeModal('resetModal');
+        } else {
+            alert('Неверное слово подтверждения');
+        }
+    }
+
+    function addSinglePlayer() {
+        const name = document.getElementById('singleNameInput').value.trim();
+        if (!name) return alert('Введите имя');
+        if (state.players.find(p => p.name === name)) return alert('Игрок уже существует');
+        
+        state.players.push({ name, buyins: 0, cashouts: 0 });
+        document.getElementById('singleNameInput').value = '';
+        closeModal('addSingleModal');
+        saveState();
+        renderAll();
+    }
+
+    function addPlayersFromList() {
+        const text = document.getElementById('listInput').value;
+        const lines = text.split('\n');
+        
+        lines.forEach(line => {
+            line = line.trim();
+            if (!line) return;
+            
+            const parts = line.split(/\s+/);
+            const name = parts[0];
+            const buyin = parts.length > 1 ? parseFloat(parts[1]) : 0;
+
+            if (!name) return;
+            if (!state.players.find(p => p.name === name)) {
+                state.players.push({ name, buyins: 0, cashouts: 0 });
+            }
+            
+            if (buyin > 0 && !isNaN(buyin)) {
+                addTxLogic(name, 'buyin', buyin);
+            }
+        });
+
+        document.getElementById('listInput').value = '';
+        closeModal('addListModal');
+        saveState();
+        renderAll();
+    }
+
+    function updatePlayerSelect() {
+        const select = document.getElementById('txPlayerSelect');
+        select.innerHTML = state.players.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+    }
+
+    function addTransaction() {
+        const player = document.getElementById('txPlayerSelect').value;
+        const type = document.getElementById('txTypeSelect').value;
+        const amount = parseFloat(document.getElementById('txAmountInput').value);
+
+        if (!amount || amount <= 0) return alert('Введите корректную сумму');
+        
+        addTxLogic(player, type, amount);
+        document.getElementById('txAmountInput').value = '';
+        closeModal('addTxModal');
+        saveState();
+        renderAll();
+    }
+
+    function addTxLogic(playerName, type, amount) {
+        const player = state.players.find(p => p.name === playerName);
+        if (!player) return;
+
+        if (type === 'buyin') player.buyins += amount;
+        else player.cashouts += amount;
+
+        state.transactions.push({
+            time: new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'}),
+            player: playerName,
+            type: type === 'buyin' ? 'Бай-ин' : 'Кэш-аут',
+            amount: amount
+        });
+    }
+
+    function renderAll() {
+        renderTransactions();
+        renderPlayers();
+    }
+
+    function renderTransactions() {
+        const tbody = document.getElementById('txTable');
+        if (state.transactions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Нет операций</td></tr>';
+            return;
+        }
+        tbody.innerHTML = state.transactions.slice().reverse().map(tx => `
+            <tr>
+                <td>${tx.time}</td>
+                <td>${tx.player}</td>
+                <td>${tx.type}</td>
+                <td>${formatMoney(tx.amount)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPlayers() {
+        const tbody = document.getElementById('playerTable');
+        if (state.players.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Нет игроков</td></tr>';
+            return;
+        }
+        tbody.innerHTML = state.players.map(p => {
+            const res = p.cashouts - p.buyins;
+            return `
+                <tr>
+                    <td>${p.name}</td>
+                    <td>${formatMoney(p.buyins)}</td>
+                    <td>${formatMoney(p.cashouts)}</td>
+                    <td class="${getMoneyClass(res)}">${res > 0 ? '+' : ''}${formatMoney(res)}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderArchive() {
+        const tbody = document.getElementById('archiveTable');
+        if (state.archive.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Нет сохранённых сессий</td></tr>';
+            return;
+        }
+        tbody.innerHTML = state.archive.map(s => `
+            <tr>
+                <td>${s.name}</td>
+                <td>${new Date(s.date).toLocaleDateString()}</td>
+                <td>${s.players}</td>
+                <td>${s.tx}</td>
+            </tr>
+        `).join('');
+    }
+
+    function roundTo5(n) {
+        if (n === 0) return 0;
+        return Math.round(n / 5) * 5;
+    }
+
+    function calculateSettlements() {
+        if (state.players.length === 0) return alert('Нет игроков');
+
+        let totalBI = 0, totalCO = 0;
+        state.players.forEach(p => {
+            totalBI += p.buyins;
+            totalCO += p.cashouts;
+        });
+
+        const bankBalance = totalBI - totalCO;
+        const numPlayers = state.players.length;
+        const bankShare = bankBalance / numPlayers;
+
+        document.getElementById('sumBI').innerText = formatMoney(totalBI);
+        document.getElementById('sumCO').innerText = formatMoney(totalCO);
+        document.getElementById('sumBank').innerText = formatMoney(Math.abs(bankBalance));
+        
+        const statusText = document.getElementById('bankStatusText');
+        if (bankBalance > 0) {
+            statusText.innerText = '(делим)';
+            statusText.style.color = 'var(--accent)';
+        } else if (bankBalance < 0) {
+            statusText.innerText = '(скидываемся)';
+            statusText.style.color = 'var(--danger)';
+        } else {
+            statusText.innerText = '(0)';
+            statusText.style.color = '#333';
+        }
+
+        let playersData = state.players.map(p => {
+            const personalBalance = p.cashouts - p.buyins;
+            const total = personalBalance + bankShare;
+            const roundedTotal = roundTo5(total);
+            return {
+                name: p.name,
+                personalBalance: personalBalance,
+                bankShare: bankShare,
+                total: total,
+                roundedTotal: roundedTotal
+            };
+        });
+
+        let sumRounded = playersData.reduce((sum, p) => sum + p.roundedTotal, 0);
+        if (sumRounded !== 0) {
+            let minPlayer = playersData.reduce((min, p) => p.roundedTotal < min.roundedTotal ? p : min);
+            minPlayer.roundedTotal -= sumRounded;
+        }
+
+        const tbody = document.getElementById('settlementsTable');
+        tbody.innerHTML = playersData.map(p => `
+            <tr>
+                <td>${p.name}</td>
+                <td class="${getMoneyClass(p.personalBalance)}">${p.personalBalance > 0 ? '+' : ''}${formatMoney(p.personalBalance)}</td>
+                <td class="${getMoneyClass(p.bankShare)}">${p.bankShare > 0 ? '+' : ''}${formatMoney(p.bankShare)}</td>
+                <td class="${getMoneyClass(p.roundedTotal)}" style="font-weight:bold;">${p.roundedTotal > 0 ? '+' : ''}${formatMoney(p.roundedTotal)}</td>
+            </tr>
+        `).join('');
+
+        let transfers = calculateTransfers(playersData);
+        renderTransfers(transfers);
+
+        document.getElementById('settlementsResult').style.display = 'block';
+    }
+
+    function calculateTransfers(playersData) {
+        let debtors = playersData.filter(p => p.roundedTotal < 0).map(p => ({name: p.name, amount: -p.roundedTotal}));
+        let creditors = playersData.filter(p => p.roundedTotal > 0).map(p => ({name: p.name, amount: p.roundedTotal}));
+        
+        let transfers = [];
+        let i = 0, j = 0;
+        
+        while (i < debtors.length && j < creditors.length) {
+            let transferAmount = Math.min(debtors[i].amount, creditors[j].amount);
+            transfers.push({
+                from: debtors[i].name,
+                to: creditors[j].name,
+                amount: transferAmount
+            });
+            
+            debtors[i].amount -= transferAmount;
+            creditors[j].amount -= transferAmount;
+            
+            if (debtors[i].amount === 0) i++;
+            if (creditors[j].amount === 0) j++;
+        }
+        
+        return transfers;
+    }
+
+    function renderTransfers(transfers) {
+        const container = document.getElementById('transfersList');
+        if (transfers.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#999;">Все рассчитались!</p>';
+            return;
+        }
+        
+        container.innerHTML = transfers.map(t => `
+            <div class="transfer-item">
+                <strong>${t.from}</strong> → <strong>${t.to}</strong>: 
+                <span class="transfer-amount">${formatMoney(t.amount)}</span>
+            </div>
+        `).join('');
+    }
+
+    // --- Восстановление UI при загрузке ---
+    function restoreUI() {
+        if (state.active) {
+            document.getElementById('gameArea').style.display = 'block';
+            document.getElementById('settlementsArea').style.display = 'block';
+            document.getElementById('sessionStatus').innerText = 'Сессия активна. Добавьте игроков.';
+            renderAll();
+        }
+        renderArchive();
+    }
+
+    // Инициализация
+    restoreUI();
+</script>
+
+</body>
+</html>
