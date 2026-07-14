@@ -59,6 +59,7 @@
         .btn-warning { background: var(--warning); color: white; }
         .btn-warning:hover, .btn-warning:active { background: #d68910; }
         .btn-small { padding: 6px 10px; font-size: 12px; min-height: 32px; }
+        .btn-icon { padding: 6px 10px; font-size: 14px; min-height: 32px; min-width: 36px; }
         
         .table-wrapper {
             overflow-x: auto;
@@ -185,7 +186,7 @@
             font-size: 1.1em;
         }
         
-        .archive-actions {
+        .archive-actions, .tx-actions {
             display: flex;
             gap: 5px;
             flex-wrap: nowrap;
@@ -196,10 +197,13 @@
             color: var(--primary);
         }
         
-        .warning-text {
-            color: var(--warning);
+        .edit-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
             font-size: 13px;
-            font-style: italic;
+            border-left: 4px solid #3498db;
         }
         
         @media (max-width: 768px) {
@@ -226,7 +230,7 @@
             
             .bank-summary p { font-size: 13px; }
             
-            .archive-actions {
+            .archive-actions, .tx-actions {
                 flex-direction: column;
             }
         }
@@ -271,7 +275,7 @@
         <h3>Журнал операций</h3>
         <div class="table-wrapper">
             <table>
-                <thead><tr><th>Время</th><th>Игрок</th><th>Тип</th><th>Сумма</th></tr></thead>
+                <thead><tr><th>Время</th><th>Игрок</th><th>Тип</th><th>Сумма</th><th>Действия</th></tr></thead>
                 <tbody id="txTable"></tbody>
             </table>
         </div>
@@ -407,6 +411,37 @@
     </div>
 </div>
 
+<!-- Модальное окно удаления операции -->
+<div id="deleteTxModal" class="modal">
+    <div class="modal-content">
+        <h3>Удаление операции</h3>
+        <p>Вы уверены, что хотите удалить эту операцию? Баланс игрока будет пересчитан.</p>
+        <div id="deleteTxInfo" class="edit-info"></div>
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('deleteTxModal')">Отмена</button>
+            <button class="btn-danger" onclick="confirmDeleteTx()">Удалить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования операции -->
+<div id="editTxModal" class="modal">
+    <div class="modal-content">
+        <h3>Редактирование операции</h3>
+        <div id="editTxOriginal" class="edit-info"></div>
+        <select id="editTxPlayerSelect"></select>
+        <select id="editTxTypeSelect">
+            <option value="buyin">Бай-ин (Внесено)</option>
+            <option value="cashout">Кэш-аут (Выплачено)</option>
+        </select>
+        <input type="number" id="editTxAmountInput" placeholder="Сумма" inputmode="numeric" pattern="[0-9]*">
+        <div class="flex-row" style="justify-content: flex-end; margin-top:15px;">
+            <button class="btn-secondary" onclick="closeModal('editTxModal')">Отмена</button>
+            <button class="btn-primary" onclick="confirmEditTx()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let state = {
         active: false,
@@ -431,6 +466,7 @@
 
     let pendingOpenIndex = null;
     let pendingDeleteIndex = null;
+    let pendingTxIndex = null; // Индекс транзакции для удаления/редактирования
 
     function saveState() {
         const sessionData = {
@@ -665,6 +701,11 @@
         select.innerHTML = state.players.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
     }
 
+    function updateEditPlayerSelect() {
+        const select = document.getElementById('editTxPlayerSelect');
+        select.innerHTML = state.players.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+    }
+
     function addTransaction() {
         const player = document.getElementById('txPlayerSelect').value;
         const type = document.getElementById('txTypeSelect').value;
@@ -694,6 +735,121 @@
         });
     }
 
+    // --- Удаление операции ---
+    function showDeleteTx(index) {
+        const tx = state.transactions[index];
+        if (!tx) return;
+        
+        pendingTxIndex = index;
+        document.getElementById('deleteTxInfo').innerHTML = `
+            <strong>${tx.player}</strong> — ${tx.type} на сумму <strong>${formatMoney(tx.amount)}</strong>
+        `;
+        openModal('deleteTxModal');
+    }
+
+    function confirmDeleteTx() {
+        if (pendingTxIndex === null) return;
+        
+        const tx = state.transactions[pendingTxIndex];
+        const player = findPlayerCaseInsensitive(tx.player);
+        
+        if (player) {
+            // Откатываем баланс игрока
+            if (tx.type === 'Бай-ин') {
+                player.buyins -= tx.amount;
+                if (player.buyins < 0) player.buyins = 0;
+            } else {
+                player.cashouts -= tx.amount;
+                if (player.cashouts < 0) player.cashouts = 0;
+            }
+        }
+        
+        // Удаляем транзакцию
+        state.transactions.splice(pendingTxIndex, 1);
+        pendingTxIndex = null;
+        
+        closeModal('deleteTxModal');
+        saveState();
+        renderAll();
+    }
+
+    // --- Редактирование операции ---
+    function showEditTx(index) {
+        const tx = state.transactions[index];
+        if (!tx) return;
+        
+        pendingTxIndex = index;
+        
+        // Показываем исходные данные
+        document.getElementById('editTxOriginal').innerHTML = `
+            <strong>Было:</strong> ${tx.player} — ${tx.type} на сумму ${formatMoney(tx.amount)}
+        `;
+        
+        // Заполняем форму текущими значениями
+        updateEditPlayerSelect();
+        document.getElementById('editTxPlayerSelect').value = tx.player;
+        document.getElementById('editTxTypeSelect').value = tx.type === 'Бай-ин' ? 'buyin' : 'cashout';
+        document.getElementById('editTxAmountInput').value = tx.amount;
+        
+        openModal('editTxModal');
+    }
+
+    function confirmEditTx() {
+        if (pendingTxIndex === null) return;
+        
+        const oldTx = state.transactions[pendingTxIndex];
+        const newPlayerName = document.getElementById('editTxPlayerSelect').value;
+        const newType = document.getElementById('editTxTypeSelect').value;
+        const newAmount = parseFloat(document.getElementById('editTxAmountInput').value);
+        
+        if (!newAmount || newAmount <= 0) {
+            alert('Введите корректную сумму');
+            return;
+        }
+        
+        const newTypeLabel = newType === 'buyin' ? 'Бай-ин' : 'Кэш-аут';
+        
+        // 1. Откатываем старую транзакцию
+        const oldPlayer = findPlayerCaseInsensitive(oldTx.player);
+        if (oldPlayer) {
+            if (oldTx.type === 'Бай-ин') {
+                oldPlayer.buyins -= oldTx.amount;
+                if (oldPlayer.buyins < 0) oldPlayer.buyins = 0;
+            } else {
+                oldPlayer.cashouts -= oldTx.amount;
+                if (oldPlayer.cashouts < 0) oldPlayer.cashouts = 0;
+            }
+        }
+        
+        // 2. Применяем новую транзакцию
+        const newPlayer = findPlayerCaseInsensitive(newPlayerName);
+        if (!newPlayer) {
+            // Если игрок не найден (не должно случиться, но на всякий случай) — откатываем всё
+            if (oldPlayer) {
+                if (oldTx.type === 'Бай-ин') oldPlayer.buyins += oldTx.amount;
+                else oldPlayer.cashouts += oldTx.amount;
+            }
+            alert('Игрок не найден');
+            return;
+        }
+        
+        if (newType === 'buyin') newPlayer.buyins += newAmount;
+        else newPlayer.cashouts += newAmount;
+        
+        // 3. Обновляем запись транзакции
+        state.transactions[pendingTxIndex] = {
+            time: oldTx.time, // Время оставляем оригинальное
+            player: newPlayer.name,
+            type: newTypeLabel,
+            amount: newAmount
+        };
+        
+        pendingTxIndex = null;
+        closeModal('editTxModal');
+        saveState();
+        renderAll();
+    }
+
     function renderAll() {
         renderTransactions();
         renderPlayers();
@@ -702,17 +858,28 @@
     function renderTransactions() {
         const tbody = document.getElementById('txTable');
         if (state.transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Нет операций</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Нет операций</td></tr>';
             return;
         }
-        tbody.innerHTML = state.transactions.slice().reverse().map(tx => `
-            <tr>
-                <td>${tx.time}</td>
-                <td>${tx.player}</td>
-                <td>${tx.type}</td>
-                <td>${formatMoney(tx.amount)}</td>
-            </tr>
-        `).join('');
+        // Отображаем в обратном порядке, но передаём реальный индекс
+        const reversedIndexes = state.transactions.map((_, i) => i).reverse();
+        tbody.innerHTML = reversedIndexes.map(idx => {
+            const tx = state.transactions[idx];
+            return `
+                <tr>
+                    <td>${tx.time}</td>
+                    <td>${tx.player}</td>
+                    <td>${tx.type}</td>
+                    <td>${formatMoney(tx.amount)}</td>
+                    <td>
+                        <div class="tx-actions">
+                            <button class="btn-warning btn-icon" onclick="showEditTx(${idx})" title="Редактировать">✏️</button>
+                            <button class="btn-danger btn-icon" onclick="showDeleteTx(${idx})" title="Удалить">🗑️</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     function renderPlayers() {
@@ -756,9 +923,76 @@
         `).join('');
     }
 
-    function roundTo5(n) {
-        if (n === 0) return 0;
-        return Math.round(n / 5) * 5;
+    function roundTo100WithSpecialLogic(playersData) {
+        let playersWith50 = [];
+        let result = playersData.map((p, idx) => {
+            const total = p.total;
+            const remainder = Math.abs(total) % 100;
+            
+            if (remainder === 50) {
+                playersWith50.push(idx);
+                return { ...p, roundedTotal: null, direction: null };
+            } else {
+                const rounded = Math.round(total / 100) * 100;
+                return { ...p, roundedTotal: rounded, direction: null };
+            }
+        });
+        
+        if (playersWith50.length > 0) {
+            const shuffled = [...playersWith50].sort(() => Math.random() - 0.5);
+            
+            if (shuffled.length % 2 === 0) {
+                for (let i = 0; i < shuffled.length; i++) {
+                    const idx = shuffled[i];
+                    const total = result[idx].total;
+                    if (i < shuffled.length / 2) {
+                        result[idx].roundedTotal = total > 0 
+                            ? Math.ceil(total / 100) * 100 
+                            : Math.floor(total / 100) * 100;
+                        result[idx].direction = 'up';
+                    } else {
+                        result[idx].roundedTotal = total > 0 
+                            ? Math.floor(total / 100) * 100 
+                            : Math.ceil(total / 100) * 100;
+                        result[idx].direction = 'down';
+                    }
+                }
+            } else {
+                let maxIdx = shuffled[0];
+                let maxTotal = result[shuffled[0]].total;
+                for (let i = 1; i < shuffled.length; i++) {
+                    if (result[shuffled[i]].total > maxTotal) {
+                        maxTotal = result[shuffled[i]].total;
+                        maxIdx = shuffled[i];
+                    }
+                }
+                
+                const total = result[maxIdx].total;
+                result[maxIdx].roundedTotal = total > 0 
+                    ? Math.floor(total / 100) * 100 
+                    : Math.ceil(total / 100) * 100;
+                result[maxIdx].direction = 'down';
+                
+                const others = shuffled.filter(i => i !== maxIdx);
+                for (let i = 0; i < others.length; i++) {
+                    const idx = others[i];
+                    const total = result[idx].total;
+                    if (i % 2 === 0) {
+                        result[idx].roundedTotal = total > 0 
+                            ? Math.ceil(total / 100) * 100 
+                            : Math.floor(total / 100) * 100;
+                        result[idx].direction = 'up';
+                    } else {
+                        result[idx].roundedTotal = total > 0 
+                            ? Math.floor(total / 100) * 100 
+                            : Math.ceil(total / 100) * 100;
+                        result[idx].direction = 'down';
+                    }
+                }
+            }
+        }
+        
+        return result;
     }
 
     function calculateSettlements() {
@@ -793,15 +1027,15 @@
         let playersData = state.players.map(p => {
             const personalBalance = p.cashouts - p.buyins;
             const total = personalBalance + bankShare;
-            const roundedTotal = roundTo5(total);
             return {
                 name: p.name,
                 personalBalance: personalBalance,
                 bankShare: bankShare,
-                total: total,
-                roundedTotal: roundedTotal
+                total: total
             };
         });
+
+        playersData = roundTo100WithSpecialLogic(playersData);
 
         let sumRounded = playersData.reduce((sum, p) => sum + p.roundedTotal, 0);
         if (sumRounded !== 0) {
